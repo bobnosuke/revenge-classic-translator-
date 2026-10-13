@@ -1,0 +1,15 @@
+{
+  "name": "Classic Translator Preview",
+  "description": "English to Japanese message translation for Revenge Classic. Translations appear on next row render. Experimental on Discord 348.10.",
+  "authors": [
+    {
+      "name": "bobnosuke",
+      "id": "0"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_language"
+  },
+  "hash": "d6a60d3e051cf950700bacb1838775e61c930fe92cbf8e596bddac79b6dc44c4"
+}
