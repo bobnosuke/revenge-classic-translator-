@@ -9,7 +9,8 @@ let running = 0, stopped = false, unpatch = null;
 let channelStore = null, selectedStore = null;
 let hookState = "not started";
 let apiState = "not tested";
-let counters = { seen: 0, eligible: 0, queued: 0, translated: 0, failed: 0, skippedPrivate: 0 };
+let renderState = "not tested";
+let counters = { seen: 0, eligible: 0, queued: 0, translated: 0, failed: 0, skippedPrivate: 0, applied: 0, applyErrors: 0 };
 function eligible(s) { return typeof s === "string" && s.length >= 3 && s.length <= 450 && /[a-z]/i.test(s) && !/[\u3040-\u30ff\u3400-\u9fff]/.test(s) && !/^\s*(https?:\/\/|\x60\x60\x60|<@!?\d+>)/.test(s); }
 function pump() {
   while (!stopped && running < 2 && queue.length) {
@@ -48,7 +49,21 @@ function translateRow(row, ret) {
     const key = "en-ja:" + source;
     const value = cache.get(key);
     if (value) {
-      ret.message = {...m, content: storage?.showOriginal ? value + "\n\n[Original] " + m.content : value};
+      const replacement = storage?.showOriginal ? value + "\n\n[Original] " + source : value;
+      try {
+        // RowManager.generate is observed to expose ret.message, but the renderer
+        // may have already built its rich-text nodes from row.message. Update both
+        // generated and source row copies; never mutate the Discord store itself.
+        const safe = {...m, content: replacement};
+        ret.message = safe;
+        if (row?.message && typeof row.message === "object") row.message = {...row.message, content: replacement};
+        counters.applied++;
+        renderState = "patched row.message and ret.message";
+      } catch (e) {
+        counters.applyErrors++;
+        renderState = "error: " + String(e);
+        console.warn("[ClassicTranslator] render patch error", String(e));
+      }
     } else if (!pending.has(key) && queue.length < 80 && !stopped) {
       pending.add(key); counters.queued++; queue.push({key, value:source}); pump();
     }
@@ -75,6 +90,9 @@ export default {
     ...[
       "Hook: " + hookState,
       "API: " + apiState,
+      "Render patch: " + renderState,
+      "Rows patched: " + counters.applied,
+      "Render patch errors: " + counters.applyErrors,
       "Rows observed: " + counters.seen,
       "English candidates: " + counters.eligible,
       "Translation requests: " + counters.queued,
