@@ -1,0 +1,14 @@
+{
+  "name": "Classic Translator (Experimental)",
+  "description": "Experimental English to Japanese translator for Revenge Classic; not yet validated on Discord 348.10.",
+  "authors": [
+    {
+      "name": "bobnosuke",
+      "id": "0"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_language"
+  }
+}
