@@ -1,11 +1,14 @@
 import { findByName, findByStoreName } from "@vendetta/metro";
 import { after } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
+import { React, ReactNative } from "@vendetta/metro/common";
 const cache = new Map();
 const pending = new Set();
 const queue = [];
 let running = 0, stopped = false, unpatch = null;
 let channelStore = null, selectedStore = null;
+let hookState = "not started";
+let apiState = "not tested";
 let counters = { seen: 0, eligible: 0, queued: 0, translated: 0, failed: 0, skippedPrivate: 0 };
 function eligible(s) { return typeof s === "string" && s.length >= 3 && s.length <= 450 && /[a-z]/i.test(s) && !/[\u3040-\u30ff\u3400-\u9fff]/.test(s) && !/^\s*(https?:\/\/|\x60\x60\x60|<@!?\d+>)/.test(s); }
 function pump() {
@@ -21,9 +24,10 @@ function pump() {
           if (cache.size >= 300) cache.delete(cache.keys().next().value);
           cache.set(key, text);
           counters.translated++;
+          apiState = "translation success";
           console.log("[ClassicTranslator] translation cached", counters.translated);
         }
-      } catch(e) { counters.failed++; console.warn("[ClassicTranslator] API error", String(e)); }
+      } catch(e) { counters.failed++; apiState = "error: " + String(e); console.warn("[ClassicTranslator] API error", String(e)); }
       finally { pending.delete(key); running--; pump(); }
     })();
   }
@@ -57,13 +61,30 @@ export default {
     try { channelStore = findByStoreName("ChannelStore"); selectedStore = findByStoreName("SelectedChannelStore"); } catch (e) { console.warn("[ClassicTranslator] channel stores unavailable", String(e)); }
     const rows = findByName("RowManager");
     if (!rows?.prototype?.generate) {
+      hookState = "RowManager.generate missing";
       console.warn("[ClassicTranslator] RowManager.generate not found; no patch applied.");
       return;
     }
     unpatch = after("generate", rows.prototype, ([row], ret) => translateRow(row, ret));
+    hookState = "RowManager hook installed";
     console.log("[ClassicTranslator] v0.3 enabled; translations appear when rows rerender. Status available at globalThis.__classicTranslatorStatus");
-    try { globalThis.__classicTranslatorStatus = () => ({...counters, cache: cache.size, pending: pending.size}); } catch {}
+    try { globalThis.__classicTranslatorStatus = () => ({...counters, cache: cache.size, pending: pending.size, hookState, apiState}); } catch {}
   },
+  settings: () => React.createElement(ReactNative.ScrollView, {style:{padding:16}},
+    React.createElement(ReactNative.Text, {style:{color:"#fff",fontSize:19,fontWeight:"bold",marginBottom:12}}, "Classic Translator Diagnostics"),
+    ...[
+      "Hook: " + hookState,
+      "API: " + apiState,
+      "Rows observed: " + counters.seen,
+      "English candidates: " + counters.eligible,
+      "Translation requests: " + counters.queued,
+      "Translations returned: " + counters.translated,
+      "API failures: " + counters.failed,
+      "Private messages skipped: " + counters.skippedPrivate,
+      "Cache entries: " + cache.size,
+      "Tip: leave this page, view an English message, then reopen this page to refresh the numbers."
+    ].map(t => React.createElement(ReactNative.Text,{key:t,style:{color:"#fff",fontSize:15,marginBottom:10}},t))
+  ),
   onUnload() {
     stopped = true; queue.length = 0;
     try { unpatch?.(); } catch {}
